@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Mitosis Pribadi (Unofficial)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#131722; --panel2:#1a2030; --border:#242b3d;
+    --text:#e6e9f0; --muted:#8a93a6; --accent:#6ee7b7; --accent2:#60a5fa;
+    --warn:#fbbf24; --danger:#f87171; --mono:'SFMono-Regular',Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    margin:0; padding:24px; line-height:1.5;
+  }
+  .wrap{max-width:880px; margin:0 auto}
+  h1{font-size:20px; margin:0 0 4px}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:20px}
+  .banner{
+    background:#2a1f0d; border:1px solid #5a4315; color:var(--warn);
+    padding:12px 16px; border-radius:10px; font-size:13px; margin-bottom:20px;
+  }
+  .banner b{color:#fde68a}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:18px 20px; margin-bottom:16px;
+  }
+  .card h2{font-size:14px; margin:0 0 12px; display:flex; align-items:center; gap:8px; color:var(--text)}
+  .card h2 .n{
+    background:var(--panel2); border:1px solid var(--border); width:22px; height:22px;
+    border-radius:6px; display:inline-flex; align-items:center; justify-content:center;
+    font-size:12px; color:var(--muted);
+  }
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  button{
+    background:var(--panel2); color:var(--text); border:1px solid var(--border);
+    padding:9px 14px; border-radius:9px; cursor:pointer; font-size:13px; font-weight:500;
+  }
+  button:hover{border-color:var(--accent2)}
+  button.primary{background:var(--accent2); color:#04121f; border-color:var(--accent2)}
+  button.primary:hover{opacity:.9}
+  button.ghost{background:transparent}
+  button:disabled{opacity:.4; cursor:not-allowed}
+  input, select, textarea{
+    background:#0e1320; border:1px solid var(--border); color:var(--text);
+    padding:9px 11px; border-radius:9px; font-size:13px; width:100%; font-family:var(--mono);
+  }
+  textarea{min-height:60px; resize:vertical}
+  label{font-size:12px; color:var(--muted); display:block; margin-bottom:5px}
+  .field{margin-bottom:10px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .status{font-size:12px; color:var(--muted); margin-top:8px; word-break:break-all}
+  .status.ok{color:var(--accent)}
+  .status.err{color:var(--danger)}
+  .balances{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px}
+  .bal{background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px}
+  .bal .t{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
+  .bal .v{font-size:18px; font-weight:600; margin-top:4px; font-family:var(--mono)}
+  .calldata{
+    background:#0e1320; border:1px solid var(--border); border-radius:9px; padding:10px;
+    font-family:var(--mono); font-size:11px; white-space:pre-wrap; word-break:break-all;
+    color:var(--accent); margin-top:10px; display:none;
+  }
+  .preset{
+    display:flex; justify-content:space-between; align-items:center; background:var(--panel2);
+    border:1px solid var(--border); border-radius:9px; padding:8px 12px; margin-bottom:6px; font-size:13px;
+  }
+  .preset button{padding:5px 10px; font-size:12px}
+  .foot{color:var(--muted); font-size:11px; text-align:center; margin-top:20px}
+  a{color:var(--accent2)}
+  .pill{font-size:11px; padding:3px 9px; border-radius:20px; background:var(--panel2); border:1px solid var(--border); color:var(--muted)}
+  .pill.on{color:var(--accent); border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Dashboard Mitosis Pribadi <span class="pill">unofficial · buatan sendiri</span></h1>
+  <div class="sub">Berjalan sepenuhnya di browser Anda. Tidak ada server, tidak ada analytics, tidak ada penyimpanan data di luar browser ini.</div>
+
+  <div class="banner">
+    <b>Baca dulu:</b> Tool ini tidak menebak alamat kontrak atau fungsi transaksi untuk Anda.
+    Untuk aksi tulis (stake/claim/dll), <b>Anda</b> yang memasukkan alamat kontrak dan nama fungsi —
+    ambil dari <a href="https://docs.mitosis.org/learn/deployed-contracts" target="_blank">docs.mitosis.org</a>,
+    tab "Write Contract" di block explorer kontrak terverifikasi, atau source resmi di
+    <a href="https://github.com/mitosis-org/protocol" target="_blank">github.com/mitosis-org/protocol</a>.
+    Setiap transaksi menampilkan <b>calldata mentah</b> sebelum Anda tanda tangan di wallet — selalu periksa dulu.
+  </div>
+
+  <!-- WALLET -->
+  <div class="card">
+    <h2><span class="n">1</span> Wallet &amp; Jaringan</h2>
+    <div class="row">
+      <button class="primary" id="btnConnect">Hubungkan Wallet</button>
+      <button class="ghost" id="btnSwitch">Ganti/Tambah Jaringan Mitosis</button>
+      <span class="pill" id="netPill">tidak terhubung</span>
+    </div>
+    <div class="status" id="walletStatus">Belum terhubung. Chain: Mitosis L1 · chainId 124816 · RPC https://rpc.mitosis.org/</div>
+  </div>
+
+  <!-- BALANCES -->
+  <div class="card">
+    <h2><span class="n">2</span> Saldo (read-only, tanpa gas)</h2>
+    <div class="balances">
+      <div class="bal"><div class="t">MITO (native)</div><div class="v" id="balNative">—</div></div>
+      <div class="bal"><div class="t">tMITO</div><div class="v" id="balTMITO">—</div></div>
+      <div class="bal"><div class="t">gMITO</div><div class="v" id="balGMITO">—</div></div>
+      <div class="bal"><div class="t">WMITO</div><div class="v" id="balWMITO">—</div></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="btnRefresh">Refresh saldo</button>
+    </div>
+    <div class="status" id="balStatus"></div>
+  </div>
+
+  <!-- CUSTOM READ -->
+  <div class="card">
+    <h2><span class="n">3</span> Baca kontrak apa saja (view/read, tanpa gas)</h2>
+    <div class="field">
+      <label>Alamat kontrak</label>
+      <input id="readAddr" placeholder="0x...">
+    </div>
+    <div class="field">
+      <label>Signature fungsi (human-readable ABI, contoh: <code>function balanceOf(address) view returns (uint256)</code>)</label>
+      <input id="readSig" placeholder="function balanceOf(address) view returns (uint256)">
+    </div>
+    <div class="field">
+      <label>Argumen, pisahkan dengan koma (kosongkan jika tidak ada)</label>
+      <input id="readArgs" placeholder="0xAlamatAnda">
+    </div>
+    <div class="row">
+      <button class="primary" id="btnRead">Panggil (read)</button>
+    </div>
+    <div class="status" id="readStatus"></div>
+  </div>
+
+  <!-- CUSTOM WRITE -->
+  <div class="card">
+    <h2><span class="n">4</span> Kirim transaksi (write — menandatangani &amp; mengirim gas)</h2>
+    <div class="field">
+      <label>Alamat kontrak</label>
+      <input id="writeAddr" placeholder="0x...">
+    </div>
+    <div class="field">
+      <label>Signature fungsi (human-readable ABI, contoh: <code>function stake(address validator) payable</code>)</label>
+      <input id="writeSig" placeholder="function approve(address,uint256)">
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label>Argumen, pisahkan dengan koma</label>
+        <input id="writeArgs" placeholder="0xValidator, 1000000000000000000">
+      </div>
+      <div class="field">
+        <label>MITO dikirim bersama tx (payable, opsional)</label>
+        <input id="writeValue" placeholder="0">
+      </div>
+    </div>
+    <div class="row">
+      <button id="btnPreview">Preview calldata</button>
+      <button class="primary" id="btnSend" disabled>Tanda tangan &amp; kirim</button>
+      <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="savePreset" style="width:auto"> simpan sebagai preset</label>
+      <input id="presetName" placeholder="nama preset" style="max-width:160px">
+    </div>
+    <div class="calldata" id="calldataBox"></div>
+    <div class="status" id="writeStatus"></div>
+  </div>
+
+  <!-- PRESETS -->
+  <div class="card">
+    <h2><span class="n">5</span> Preset tersimpan (di browser ini saja)</h2>
+    <div id="presetList"><div class="status">Belum ada preset. Isi form di atas, centang "simpan sebagai preset".</div></div>
+  </div>
+
+  <div class="foot">
+    Kode terbuka, jalan lokal di browser Anda. Tidak berafiliasi dengan tim Mitosis resmi.
+    Selalu verifikasi alamat kontrak sendiri sebelum menandatangani transaksi bernilai.
+    Aplikasi resmi: <a href="https://app.mitosis.org" target="_blank">app.mitosis.org</a>
+  </div>
+</div>
+
+<script>
+const CHAIN_ID_DEC = 124816;
+const CHAIN_ID_HEX = "0x" + CHAIN_ID_DEC.toString(16);
+const RPC_URL = "https://rpc.mitosis.org/";
+
+// Verified from docs.mitosis.org/learn/deployed-contracts
+const TOKENS = {
+  gMITO: "0x1248163272144FdbBbE6D1a8c43Ca56DE9bD5cEA",
+  WMITO: "0x124816325006f97E7136942B134a9545D95b05Fa",
+  tMITO: "0x8f3bcF26E63417C4ac1194aE086409E33b75d3f3",
+};
+const ERC20_ABI = ["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)"];
+
+let provider, signer, userAddress;
+const $ = (id) => document.getElementById(id);
+
+function setStatus(el, msg, cls) {
+  el.textContent = msg;
+  el.className = "status" + (cls ? " " + cls : "");
+}
+
+async function connectWallet() {
+  if (!window.ethereum) { setStatus($("walletStatus"), "Wallet browser tidak ditemukan. Install MetaMask atau sejenisnya.", "err"); return; }
+  provider = new ethers.BrowserProvider(window.ethereum);
+  await provider.send("eth_requestAccounts", []);
+  signer = await provider.getSigner();
+  userAddress = await signer.getAddress();
+  const net = await provider.getNetwork();
+  $("netPill").textContent = net.chainId.toString() === String(CHAIN_ID_DEC) ? "Mitosis L1 ✓" : `chain ${net.chainId} (bukan Mitosis)`;
+  $("netPill").className = "pill" + (net.chainId.toString() === String(CHAIN_ID_DEC) ? " on" : "");
+  setStatus($("walletStatus"), "Terhubung: " + userAddress, "ok");
+  $("btnSend").disabled = false;
+  refreshBalances();
+}
+
+async function switchNetwork() {
+  if (!window.ethereum) return;
+  try {
+    await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN_ID_HEX }] });
+  } catch (e) {
+    if (e.code === 4902) {
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [{
+          chainId: CHAIN_ID_HEX,
+          chainName: "Mitosis L1",
+          nativeCurrency: { name: "MITO", symbol: "MITO", decimals: 18 },
+          rpcUrls: [RPC_URL],
+          blockExplorerUrls: []
+        }]
+      });
+    } else {
+      setStatus($("walletStatus"), "Gagal ganti jaringan: " + e.message, "err");
+    }
+  }
+}
+
+async function refreshBalances() {
+  if (!provider || !userAddress) { setStatus($("balStatus"), "Hubungkan wallet dulu.", "err"); return; }
+  setStatus($("balStatus"), "Membaca saldo...");
+  try {
+    const native = await provider.getBalance(userAddress);
+    $("balNative").textContent = ethers.formatEther(native);
+
+    for (const [key, addr] of Object.entries(TOKENS)) {
+      const c = new ethers.Contract(addr, ERC20_ABI, provider);
+      try {
+        const [bal, dec] = await Promise.all([c.balanceOf(userAddress), c.decimals()]);
+        $("bal" + key).textContent = ethers.formatUnits(bal, dec);
+      } catch (e) {
+        $("bal" + key).textContent = "err";
+      }
+    }
+    setStatus($("balStatus"), "Terakhir diperbarui: " + new Date().toLocaleTimeString(), "ok");
+  } catch (e) {
+    setStatus($("balStatus"), "Gagal: " + e.message, "err");
+  }
+}
+
+function parseArgs(str) {
+  if (!str || !str.trim()) return [];
+  return str.split(",").map(s => s.trim()).filter(s => s.length);
+}
+
+async function readContract() {
+  const addr = $("readAddr").value.trim();
+  const sig = $("readSig").value.trim();
+  const args = parseArgs($("readArgs").value);
+  if (!ethers.isAddress(addr)) { setStatus($("readStatus"), "Alamat kontrak tidak valid.", "err"); return; }
+  if (!sig) { setStatus($("readStatus"), "Isi signature fungsi.", "err"); return; }
+  try {
+    const p = provider || new ethers.JsonRpcProvider(RPC_URL);
+    const c = new ethers.Contract(addr, [sig], p);
+    const fnName = sig.split("function ")[1].split("(")[0].trim();
+    const result = await c[fnName](...args);
+    setStatus($("readStatus"), "Hasil: " + result.toString(), "ok");
+  } catch (e) {
+    setStatus($("readStatus"), "Gagal: " + e.message, "err");
+  }
+}
+
+function buildCalldata() {
+  const addr = $("writeAddr").value.trim();
+  const sig = $("writeSig").value.trim();
+  const args = parseArgs($("writeArgs").value);
+  if (!ethers.isAddress(addr)) { setStatus($("writeStatus"), "Alamat kontrak tidak valid.", "err"); return null; }
+  if (!sig) { setStatus($("writeStatus"), "Isi signature fungsi.", "err"); return null; }
+  try {
+    const iface = new ethers.Interface([sig]);
+    const fnName = sig.split("function ")[1].split("(")[0].trim();
+    const data = iface.encodeFunctionData(fnName, args);
+    return { addr, data, fnName };
+  } catch (e) {
+    setStatus($("writeStatus"), "Gagal encode: " + e.message, "err");
+    return null;
+  }
+}
+
+function previewCalldata() {
+  const built = buildCalldata();
+  if (!built) return;
+  const value = $("writeValue").value.trim() || "0";
+  $("calldataBox").style.display = "block";
+  $("calldataBox").textContent =
+    `to:     ${built.addr}\nfungsi: ${built.fnName}\nvalue:  ${value} MITO\ndata:   ${built.data}`;
+  setStatus($("writeStatus"), "Periksa calldata di atas sebelum kirim. Cocokkan dengan ABI/source resmi.", "ok");
+}
+
+async function sendTx() {
+  if (!signer) { setStatus($("writeStatus"), "Hubungkan wallet dulu.", "err"); return; }
+  const built = buildCalldata();
+  if (!built) return;
+  const valueStr = $("writeValue").value.trim() || "0";
+  try {
+    const tx = await signer.sendTransaction({
+      to: built.addr,
+      data: built.data,
+      value: ethers.parseEther(valueStr)
+    });
+    setStatus($("writeStatus"), "Transaksi dikirim: " + tx.hash + " — menunggu konfirmasi...", "ok");
+    if ($("savePreset").checked) savePreset();
+    await tx.wait();
+    setStatus($("writeStatus"), "Terkonfirmasi: " + tx.hash, "ok");
+    refreshBalances();
+  } catch (e) {
+    setStatus($("writeStatus"), "Gagal: " + (e.shortMessage || e.message), "err");
+  }
+}
+
+function loadPresets() {
+  return JSON.parse(localStorage.getItem("mitosis_dash_presets") || "[]");
+}
+function renderPresets() {
+  const presets = loadPresets();
+  const list = $("presetList");
+  if (!presets.length) { list.innerHTML = '<div class="status">Belum ada preset.</div>'; return; }
+  list.innerHTML = "";
+  presets.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "preset";
+    row.innerHTML = `<span>${p.name} — ${p.fnName}(${p.args.join(", ")})</span>`;
+    const btns = document.createElement("div");
+    const useBtn = document.createElement("button");
+    useBtn.textContent = "pakai";
+    useBtn.onclick = () => {
+      $("writeAddr").value = p.addr; $("writeSig").value = p.sig;
+      $("writeArgs").value = p.args.join(", "); $("writeValue").value = p.value;
+      previewCalldata();
+    };
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "hapus";
+    delBtn.onclick = () => { presets.splice(i, 1); localStorage.setItem("mitosis_dash_presets", JSON.stringify(presets)); renderPresets(); };
+    btns.appendChild(useBtn); btns.appendChild(delBtn);
+    row.appendChild(btns);
+    list.appendChild(row);
+  });
+}
+function savePreset() {
+  const name = $("presetName").value.trim() || "preset";
+  const presets = loadPresets();
+  presets.push({
+    name, addr: $("writeAddr").value.trim(), sig: $("writeSig").value.trim(),
+    fnName: $("writeSig").value.split("function ")[1]?.split("(")[0]?.trim() || "?",
+    args: parseArgs($("writeArgs").value), value: $("writeValue").value.trim() || "0"
+  });
+  localStorage.setItem("mitosis_dash_presets", JSON.stringify(presets));
+  renderPresets();
+}
+
+$("btnConnect").onclick = connectWallet;
+$("btnSwitch").onclick = switchNetwork;
+$("btnRefresh").onclick = refreshBalances;
+$("btnRead").onclick = readContract;
+$("btnPreview").onclick = previewCalldata;
+$("btnSend").onclick = sendTx;
+
+renderPresets();
+</script>
+</body>
+</html>
